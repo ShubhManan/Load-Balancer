@@ -3,34 +3,30 @@ package loadbalancingstrategies
 import (
 	"log"
 	"os"
-	"reverse_proxy/config"
+	commonObjects "reverse_proxy/commons"
 	"reverse_proxy/queue"
 )
 
-type BackendServer struct {
-	ServerUrl string
-}
-
 type LoadBalancer interface {
-	Initialize([]BackendServer)
-	SelectBackend() BackendServer
+	Initialize([]commonObjects.BackendServer)
+	SelectBackend() commonObjects.BackendServer
 }
 
 type RoundRobinLoadBalancer struct {
-	ServersList queue.Queue[BackendServer]
+	ServersList queue.Queue[commonObjects.BackendServer]
 }
 
-func (s *RoundRobinLoadBalancer) Initialize(serverList []BackendServer) {
+func (s *RoundRobinLoadBalancer) Initialize(serverList []commonObjects.BackendServer) {
 	if len(serverList) == 0 {
 		log.Fatal("No backend server found!")
 	}
 	for _, backendUrl := range serverList {
-		backend := BackendServer{backendUrl.ServerUrl}
+		backend := commonObjects.BackendServer{ServerUrl: backendUrl.ServerUrl, ActiveRequestCount: 0}
 		s.ServersList.Push(backend)
 	}
 }
 
-func (s *RoundRobinLoadBalancer) SelectBackend() BackendServer {
+func (s *RoundRobinLoadBalancer) SelectBackend() commonObjects.BackendServer {
 	svr, _ := s.ServersList.Pop()
 	s.ServersList.Push(svr)
 	return svr
@@ -41,19 +37,12 @@ func GelLoadBalancer() LoadBalancer {
 	var lb LoadBalancer
 	switch strategy {
 	case "round_robin":
-		var defQ queue.Queue[BackendServer]
+		var defQ queue.Queue[commonObjects.BackendServer]
 		lb = &RoundRobinLoadBalancer{defQ}
 	default:
-		var defQ queue.Queue[BackendServer]
+		var defQ queue.Queue[commonObjects.BackendServer]
 		lb = &RoundRobinLoadBalancer{defQ}
 	}
-
-	// Initialize the servers and the load balancing strategy
-	var servers []BackendServer
-	for _, su := range config.ServerUrls {
-		servers = append(servers, BackendServer{su})
-	}
-	lb.Initialize(servers)
 
 	return lb
 }
