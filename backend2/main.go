@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -21,6 +22,7 @@ func main() {
 
 func getUsers(c *gin.Context) {
 	log.Printf("The request is coming from %s\n", c.Request.Header.Get("x-forwarded-for"))
+	time.Sleep(20 * time.Second)
 	c.JSON(200, gin.H{
 		"users":         users,
 		"numberOfUsers": len(users),

@@ -43,4 +43,6 @@ func (rp *ReverseProxy) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%v", backend.ServerUrl)
 	proxy := httputil.NewSingleHostReverseProxy(targetUrl)
 	proxy.ServeHTTP(w, r)
+	rp.loadBalancer.RequestCompleted(backend)
+
 }

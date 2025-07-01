@@ -1,6 +1,7 @@
 package loadbalancingstrategies
 
 import (
+	"container/heap"
 	"log"
 	"os"
 	commonObjects "reverse_proxy/commons"
@@ -9,7 +10,8 @@ import (
 
 type LoadBalancer interface {
 	Initialize([]commonObjects.BackendServer)
-	SelectBackend() commonObjects.BackendServer
+	SelectBackend() *commonObjects.BackendServer
+	RequestCompleted(*commonObjects.BackendServer)
 }
 
 type RoundRobinLoadBalancer struct {
@@ -26,10 +28,43 @@ func (s *RoundRobinLoadBalancer) Initialize(serverList []commonObjects.BackendSe
 	}
 }
 
-func (s *RoundRobinLoadBalancer) SelectBackend() commonObjects.BackendServer {
+func (s *RoundRobinLoadBalancer) SelectBackend() *commonObjects.BackendServer {
 	svr, _ := s.ServersList.Pop()
 	s.ServersList.Push(svr)
+	return &svr
+}
+
+func (s *RoundRobinLoadBalancer) RequestCompleted(*commonObjects.BackendServer) {}
+
+type LeastConnectionLoadBalancer struct {
+	ServersList queue.PriorityQueue
+}
+
+func (lc *LeastConnectionLoadBalancer) Initialize(serverList []commonObjects.BackendServer) {
+	if len(serverList) == 0 {
+		log.Fatal("No backend server found!")
+	}
+	lc.ServersList = make(queue.PriorityQueue, len(serverList))
+
+	i := 0
+	for _, backendUrl := range serverList {
+		lc.ServersList[i] = &commonObjects.BackendServer{ServerUrl: backendUrl.ServerUrl, ActiveRequestCount: 0, Index: i}
+		i++
+	}
+	heap.Init(&lc.ServersList)
+}
+
+func (lc *LeastConnectionLoadBalancer) SelectBackend() *commonObjects.BackendServer {
+	var svr *commonObjects.BackendServer = heap.Pop(&lc.ServersList).(*commonObjects.BackendServer)
+	svr.ActiveRequestCount += 1
+	heap.Push(&lc.ServersList, svr)
+
 	return svr
+}
+
+func (lc *LeastConnectionLoadBalancer) RequestCompleted(svr *commonObjects.BackendServer) {
+	svr.ActiveRequestCount -= 1
+	heap.Fix(&lc.ServersList, svr.Index)
 }
 
 func GelLoadBalancer() LoadBalancer {
@@ -40,8 +75,8 @@ func GelLoadBalancer() LoadBalancer {
 		var defQ queue.Queue[commonObjects.BackendServer]
 		lb = &RoundRobinLoadBalancer{defQ}
 	default:
-		var defQ queue.Queue[commonObjects.BackendServer]
-		lb = &RoundRobinLoadBalancer{defQ}
+		var defQ queue.PriorityQueue
+		lb = &LeastConnectionLoadBalancer{defQ}
 	}
 
 	return lb
